@@ -1,24 +1,23 @@
-# Local market-data collector
+# SQLite-backed launchd collector template
 
-This application collects OpenRouter token totals and GPU market data on one computer. GPU sources include AWS, Vast.ai, Runpod, Gcore, CLORE.AI, SaladCloud, Nebius, Azure, Google Cloud, and CoreWeave.
+This repository is one complete collection job for an agent to copy and modify.
+It is not a plugin framework. The source, parser, schema, and schedule are explicit files.
 
-See [`docs/provider-source-setup.md`](docs/provider-source-setup.md) for provider scope and the final credential to-do list.
+The example collects timestamped station temperatures into SQLite.
+By default, it reads a local JSON fixture without credentials or network access.
+An optional HTTPS source demonstrates bounded reads, request timeouts, bearer authentication, and retries.
 
-See [`RELEASE_STATUS.md`](RELEASE_STATUS.md) for implementation status. Vast.ai offer and AWS Spot-price collectors are available. Release 4 source decisions are documented in [`docs/release-4-source-verification.md`](docs/release-4-source-verification.md).
-
-The application stores normalized observations in SQLite. It also stores each unchanged source response as an immutable gzip file.
-
-## Install
+## Install and run
 
 1. Install Python 3.12 and `uv`.
-2. Change to this directory.
-3. Install the application:
+2. Change to the repository directory.
+3. Install the dependencies:
 
    ```bash
-   uv sync
+   uv sync --locked
    ```
 
-4. Copy the example files:
+4. Copy the example configuration:
 
    ```bash
    cp config.example.toml config.toml
@@ -26,177 +25,164 @@ The application stores normalized observations in SQLite. It also stores each un
    chmod 600 .env
    ```
 
-5. Put an OpenRouter API key in `.env`.
-6. Initialize the application:
+5. Initialize the database:
 
    ```bash
-   uv run --env-file .env market-data init
-   uv run --env-file .env market-data verify-config
+   uv run collector init
    ```
 
-7. Collect the available history:
+6. Collect one snapshot:
 
    ```bash
-   uv run --env-file .env market-data backfill openrouter --start 2025-01-01
+   uv run collector collect
    ```
 
-8. On macOS, install one agent for every enabled source:
+7. Inspect the run records:
 
    ```bash
-   uv run --env-file .env market-data launchd install
-   uv run --env-file .env market-data status
+   uv run collector status --json
    ```
 
-## Data locations
+All configuration paths resolve from `config.toml`, not the current directory.
+Keep the configuration in the repository root because migrations and launchd resources also resolve from that directory.
+An alternate configuration path uses `collector --config /absolute/repository/config.toml collect`.
 
-The default configuration stores runtime data under `var/`:
+## Schedule on macOS
 
-- `var/market-data.sqlite3` contains normalized data and run records.
-- `var/raw/openrouter/` contains immutable source responses.
-- `var/raw/vast/` and `var/raw/aws_spot/` contain source and discovery responses.
-- `var/raw/<provider>/` contains responses from each additional provider.
-- `var/quarantine/openrouter/` contains responses that fail schema validation.
-- `var/logs/` contains JSONL and `launchd` logs.
-- `var/locks/` contains the active source lock.
-
-The application resolves relative paths from `config.toml`. It does not resolve these paths from the current directory.
-
-## Operations
-
-Run one overlapping daily collection:
-
-```bash
-uv run --env-file .env market-data collect openrouter
-```
-
-Retry a specific interval:
-
-```bash
-uv run --env-file .env market-data collect openrouter --start 2026-08-01 --end 2026-08-03
-```
-
-The command is idempotent. A changed historical value creates a linked revision.
-
-Collect Vast offers (all configured contracts or one contract):
-
-```bash
-uv run --env-file .env market-data collect vast
-uv run --env-file .env market-data collect vast --contract interruptible
-```
-
-Collect GPU Spot prices from every enabled AWS region. Leave `aws_spot.regions = []` to enable region discovery:
-
-```bash
-uv run --env-file .env market-data collect aws-spot
-```
-
-A region that requires account opt-in is collected only after that region is enabled for the configured AWS account. Use `--region us-east-1` for a bounded run.
-
-Use the policy in `docs/aws-market-data-readonly-policy.json` for the AWS identity.
-Do not attach `AmazonEC2FullAccess` or another write policy.
-
-Set `AWS_PROFILE` in `.env` to the read-only profile name. Then refresh AWS SSO:
-
-```bash
-uv run --env-file .env sh -c 'aws sso login --profile "$AWS_PROFILE"'
-```
-
-Use `RunInstances --dry-run` to make sure that the profile returns `UnauthorizedOperation`.
-A `DryRunOperation` result means that the profile can launch instances and is not acceptable.
-
-Show machine-readable status:
-
-```bash
-uv run --env-file .env market-data status --json
-```
-
-Collect one additional provider:
-
-```bash
-uv run --env-file .env market-data collect provider runpod
-```
-
-Export approved local views as JSONL or CSV. JSONL includes generation time and mapping-version metadata:
-
-```bash
-uv run --env-file .env market-data report query vast_offer_depth
-uv run --env-file .env market-data report query aws_spot_per_gpu --format csv --output spot.csv
-```
-
-Show the Release 4 source-verification gate:
-
-```bash
-uv run --env-file .env market-data indexes status
-```
-
-Apply application updates and migrations:
-
-```bash
-uv sync
-uv run --env-file .env market-data migrate
-uv run --env-file .env market-data verify-config
-```
-
-Change a credential by editing `.env`. Keep the file mode at `0600`.
-
-Unload the scheduled agent without deleting data:
-
-```bash
-uv run --env-file .env market-data launchd uninstall
-```
-
-Set each source's `enabled = false`, then reinstall the agents, to disable collection without deleting data.
-
-Inspect the agent on macOS:
-
-```bash
-launchctl print gui/$(id -u)/local.market-data.openrouter
-launchctl print gui/$(id -u)/local.market-data.vast.interruptible
-launchctl print gui/$(id -u)/local.market-data.aws-spot
-```
-
-## Backup
-
-1. Stop the scheduled agent.
-2. Checkpoint the database:
+1. Run a successful manual collection before scheduling.
+2. Set `interval_seconds` and a unique `label` in `config.toml`.
+3. Install the user LaunchAgent:
 
    ```bash
-   sqlite3 var/market-data.sqlite3 'PRAGMA wal_checkpoint(TRUNCATE);'
+   uv run collector launchd install
    ```
 
-3. Copy the database and raw directory to the backup location:
+4. Inspect launchd:
 
    ```bash
-   cp var/market-data.sqlite3 /path/to/backup/
-   cp -R var/raw /path/to/backup/
+   uv run collector launchd status
    ```
 
-4. Record checksums:
+5. To stop scheduled collection, uninstall the agent:
 
    ```bash
-   find /path/to/backup -type f -print0 | xargs -0 shasum -a 256 > /path/to/backup/SHA256SUMS
+   uv run collector launchd uninstall
    ```
 
-5. Install the scheduled agent again.
+Installation creates `~/Library/LaunchAgents/<label>.plist` and loads it into the current user's GUI domain.
+It does not run the collector immediately. The first scheduled run occurs after the configured interval.
+Missed intervals do not form a durable queue. Snapshot collection retrieves the latest available source data.
 
-## Restore
+The generated plist contains absolute paths to the repository, virtual-environment Python, wrapper, configuration, and logs.
+It contains no credential values. The wrapper reads no shell configuration and clears inherited collector credentials.
+Python loads `.env` with a restricted `COLLECTOR_TOKEN=value` format. The file must have private permissions.
 
-1. Unload the scheduled agent.
-2. Move the damaged `var/` directory to a safe location.
-3. Create a new `var/` directory.
-4. Copy the database and raw directory from the backup.
-5. Compare the files with `SHA256SUMS`.
-6. Run `uv run --env-file .env market-data migrate`.
-7. Run `uv run --env-file .env market-data status`.
-8. Install the scheduled agent again.
+Keep the repository and `.venv` at stable paths. After moving either location, reinstall the agent.
+After changing the label, uninstall the old label before installing the new one.
+After changing the schedule, reinstall the agent.
+Use a location outside macOS-protected Desktop and Documents folders unless access permissions explicitly allow it.
+A logged-out or sleeping Mac does not guarantee timely collection.
 
-## Safety and scope
+## HTTP source
 
-The OpenRouter collector only calls the rankings endpoint and does not make inference requests. The Vast collector only searches offers; it never rents or bids. The AWS collector invokes read-only EC2 region, offering, and Spot Price History operations; it never launches instances.
+Set `url` to an HTTPS endpoint that returns this JSON schema:
 
-The application never stores the bearer token in request metadata, raw paths, SQLite, logs, fixtures, or `launchd` property lists.
+```json
+[
+  {
+    "station": "north",
+    "measured_at": "2026-01-01T00:00:00Z",
+    "temperature_c": 12.5
+  }
+]
+```
 
-Tests do not use the network by default. Run them with `uv run pytest`.
+For bearer authentication, set `COLLECTOR_TOKEN` in the private `.env` file.
+Do not put secrets in the URL or configuration. The HTTP path makes only GET requests and never follows redirects.
+It retries transport errors, HTTP 429, and selected server errors with bounded exponential delays.
+Authentication and schema errors do not trigger retries.
 
-The installed wrapper passes `.env` to `uv`. It removes inherited credential variables first.
-This behavior makes terminal and `launchd` credential selection identical.
+`timeout_seconds` limits HTTP connect/read/write/pool inactivity, not total run duration.
+`max_response_bytes` limits decoded payload bytes. The collector also checks fixture and replay sizes.
+The example does not implement pagination, server-specific quotas, or a hard process deadline.
+Add these rules when the real source requires them.
+
+## Data and recovery
+
+Runtime data lives under `var/` by default:
+
+| Path | Contents |
+| --- | --- |
+| `collector.sqlite3` | Measurements, run records, retrievals, migrations, and checkpoint |
+| `raw/` | Exact source bytes in immutable gzip files |
+| `quarantine/` | References to raw responses with invalid schemas |
+| `logs/collector.jsonl` | Structured lifecycle events |
+| `logs/launchd.*.log` | Scheduled stdout and stderr |
+| `collector.lock` | Persistent file for the kernel lock |
+
+Each retrieval records its checksum, size, timestamp, and content type.
+Each run records its parser version, outcome, record count, and retrieval ID.
+Logs and run records contain error classes, not upstream exception messages that can expose credentials.
+
+The collector normalizes timestamps to UTC and upserts by station and timestamp.
+Historical corrections replace the value for that key. This example does not preserve linked revisions.
+Duplicate keys inside one response cause quarantine rather than an arbitrary overwrite.
+
+Raw data persists before parsing. Measurements, checkpoint, and successful run status commit in one transaction.
+The checkpoint records the newest measurement timestamp. This snapshot collector rereads the entire response rather than using a pagination cursor.
+
+If parsing fails, correct the parser or source schema before replay.
+Find the retrieval ID in `collector status --json`, then run:
+
+```bash
+uv run collector replay <retrieval-id>
+```
+
+Replay verifies the checksum and uses the current parser and write rules.
+It does not access the source or change the checkpoint.
+
+If a write fails, the transaction rolls back the measurements and checkpoint together.
+Run `collector collect` again after correcting the fault.
+If collection overlaps, the new scheduled invocation exits successfully with a skip message.
+
+After a process crash, the kernel releases the lock automatically.
+The next collection marks stale `running` rows as `interrupted` before retrying the snapshot.
+Do not remove the lock file while a process can hold it open.
+A crash between raw storage and retrieval registration can leave an unreferenced raw file.
+
+## Backup and retention
+
+1. Uninstall the schedule.
+2. Wait for active collection to finish.
+3. Create a SQLite backup:
+
+   ```bash
+   sqlite3 var/collector.sqlite3 '.backup /absolute/backup/collector.sqlite3'
+   ```
+
+4. Copy `var/raw/` and `var/quarantine/` to the same backup.
+5. Record checksums for the backup files.
+6. Install the schedule again.
+
+Before restoring, stop collection and preserve the damaged runtime directory.
+Restore the database and raw files from the same backup.
+Validate their checksums before collection or replay.
+
+Raw payloads can contain secrets or personal data. Define access, encryption, retention, and deletion rules before live collection.
+The template does not delete raw data or rotate logs automatically.
+
+## Adapt and test
+
+See [AGENTS.md](AGENTS.md) for the exact adaptation procedure.
+
+```bash
+uv run python -m pytest
+```
+
+Tests use local fixtures and mocked HTTP. Network access is blocked by default.
+They cover duplicate runs, rollback, replay, quarantine, retries, limits, migrations, locks, credentials, and launchd configuration.
+CI runs on Linux and macOS. Automated launchd tests mock service operations and do not install an actual user agent.
+
+This is a breaking replacement of the earlier market-data application and generic framework.
+Old commands and database schemas are not supported or migrated.
+Use this repository checkout as the template. A standalone wheel does not include the root migrations and launchd resources.

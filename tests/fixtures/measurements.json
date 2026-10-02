@@ -1,0 +1,4 @@
+[
+  {"station": "north", "measured_at": "2026-01-01T00:00:00Z", "temperature_c": 12.5},
+  {"station": "south", "measured_at": "2026-01-01T00:00:00Z", "temperature_c": 19.0}
+]

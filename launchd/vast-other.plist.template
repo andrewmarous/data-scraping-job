@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-<key>Label</key><string>__LABEL__</string><key>ProgramArguments</key><array><string>__WRAPPER__</string><string>collect</string><string>vast</string><string>--contract</string><string>__CONTRACT__</string></array>
-<key>RunAtLoad</key><true/><key>StartInterval</key><integer>__INTERVAL__</integer>
-<key>StandardOutPath</key><string>__LOG_DIR__/vast-__CONTRACT__.launchd.out.log</string><key>StandardErrorPath</key><string>__LOG_DIR__/vast-__CONTRACT__.launchd.err.log</string>
-</dict></plist>

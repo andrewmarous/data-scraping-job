@@ -1,51 +1,10 @@
-[data]
-directory = "var"
-raw_retention_days = 0
-
-[logging]
-level = "INFO"
-retention_days = 30
-
-[application]
-contact = "replace-with-local-contact"
-max_run_minutes = 30
-
-[openrouter]
-enabled = true
-cadence = "daily"
-overlap_days = 3
-backfill_start = "2025-01-01"
-request_timeout_seconds = 30
-max_response_bytes = 52428800
-
-[vast]
-enabled = false
-contracts = ["on-demand", "interruptible", "reserved"]
-bid_interval_minutes = 5
-other_interval_minutes = 10
-request_timeout_seconds = 30
-max_response_bytes = 20971520
-
-[aws_spot]
-enabled = false
-# Empty means every enabled or automatically enabled commercial AWS region.
-# Add region names only when intentionally limiting collection.
-regions = []
-instance_families = ["g5", "g6", "p4", "p5"]
-overlap_hours = 48
-aws_profile = "token-market-data-readonly"
-
-# Release 4 has no enabled source. A source can be added only after its API,
-# semantics, retention, attribution, and republication rights are verified.
-[gpu_indexes]
-enabled_sources = []
-
-[provider_catalogs]
-# Enable after adding the credentials and account identifiers described in README.md.
-enabled_sources = []
-interval_minutes = 60
-request_timeout_seconds = 30
-max_response_bytes = 52428800
-gcore_project_id = "replace-with-gcore-project-id"
-gcore_region_ids = ["replace-with-gcore-region-id"]
-salad_organization = "replace-with-salad-organization"
+# Paths resolve from this file. Keep it in the repository root.
+data_directory = "var"
+fixture = "tests/fixtures/measurements.json"
+# Empty URL uses the fixture. A nonempty URL must serve the same JSON schema.
+url = ""
+timeout_seconds = 30
+max_response_bytes = 1048576
+retries = 2
+interval_seconds = 3600
+label = "local.collector"

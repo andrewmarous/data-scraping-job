@@ -98,7 +98,7 @@ wheels = [
 ]
 
 [[package]]
-name = "local-market-data"
+name = "launchd-collector-template"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
