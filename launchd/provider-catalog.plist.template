@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>Label</key><string>__LABEL__</string>
+<key>ProgramArguments</key><array><string>__WRAPPER__</string><string>collect</string><string>provider</string><string>__SOURCE__</string></array>
+<key>RunAtLoad</key><true/><key>StartInterval</key><integer>__INTERVAL__</integer>
+<key>ProcessType</key><string>Background</string><key>LowPriorityIO</key><true/>
+<key>StandardOutPath</key><string>__LOG_DIR__/__SOURCE__.launchd.out.log</string>
+<key>StandardErrorPath</key><string>__LOG_DIR__/__SOURCE__.launchd.err.log</string>
+</dict></plist>
